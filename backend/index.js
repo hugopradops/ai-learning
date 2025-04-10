@@ -5,11 +5,11 @@ import knex from "knex";
 
 // Content moderation logic
 const inappropriateWords = [
-    "crazy", "offensive", "inappropriate", "violent", "hate", "racist", "sexist", 
-    "abuse", "harassment", "threat", "kill", "murder", "terrorist", "bomb", 
-    "explosive", "illegal", "drugs", "weapon", "gun", "knife", "porn", "explicit", 
-    "nudity", "swear", "curse", "profanity", "slur", "discrimination", "bully", 
-    "harm", "self-harm", "suicide", "death", "crime", "fraud", "scam", "spam", 
+    "crazy", "offensive", "inappropriate", "violent", "hate", "racist", "sexist",
+    "abuse", "harassment", "threat", "kill", "murder", "terrorist", "bomb",
+    "explosive", "illegal", "drugs", "weapon", "gun", "knife", "porn", "explicit",
+    "nudity", "swear", "curse", "profanity", "slur", "discrimination", "bully",
+    "harm", "self-harm", "suicide", "death", "crime", "fraud", "scam", "spam",
     "malware", "virus", "phishing", "hacking", "exploit", "dark web", "blackmail"
 ];
 
@@ -40,6 +40,27 @@ app.get('/', (req, res) => {
     res.send('Backend server is running');
 });
 
+app.get('/api/list_blocked', async (req, res) => {
+    try {
+        const blockedIPs = await db('login_attempts')
+            .select('ip', 'number_of_attempts', 'last_updated_date')
+            .where('number_of_attempts', '>=', 5)
+            .orderBy('last_updated_date', 'desc');
+        res.json(blockedIPs);
+    } catch (error) {
+        console.error('Error fetching blocked IPs:', error.message);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+
+const getIp = (forwardHeader) => {
+    if (forwardHeader) {
+        const ip = forwardHeader.split(',')[0].trim();
+        return ip.replace("::ffff:", "");
+    }
+    return requestIp.getClientIp(req).replace("::ffff:", "");;
+}
 
 app.post('/api/query', async (req, res) => {
     const { prompt } = req.body;
@@ -48,8 +69,8 @@ app.post('/api/query', async (req, res) => {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    const containsInappropriateContent = inappropriateWords.some(word => 
-        promptInput.toLowerCase().includes(word)
+    const containsInappropriateContent = inappropriateWords.some(word =>
+        prompt.toLowerCase().includes(word)
     );
 
     if (containsInappropriateContent) {
@@ -62,7 +83,9 @@ app.post('/api/query', async (req, res) => {
         });
     }
 
-    const ip = requestIp.getClientIp(req).replace("::ffff:", "");
+    console.log(req.header('x-forwarded-for'));
+
+    const ip = getIp(req.header('x-forwarded-for'));
 
     try {
         const attempts = await db.select('number_of_attempts', 'last_updated_date').from('login_attempts').where('ip', ip).first();
@@ -83,7 +106,7 @@ app.post('/api/query', async (req, res) => {
             });
         }
 
-        
+
 
         const updatedExecutions = lastUpdatedDate && lastUpdatedDate <= oneHourAgo ? 1 : numberOfExecutions + 1;
         await db('login_attempts')

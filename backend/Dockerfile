@@ -5,7 +5,7 @@ FROM node:22-alpine
 WORKDIR /app
 
 # Copy the project files to the container
-COPY src/ .
+COPY . .
 
 RUN npm install 
 
